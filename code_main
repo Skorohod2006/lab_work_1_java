@@ -1,0 +1,343 @@
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+/**
+ * класс account представляет банковский счет и поддерживает операции пополнения, снятия и просмотра истории транзакций.
+ */
+class Account {
+    private static final String ACCOUNT_OPENED = "счет успешно открыт.";
+    private static final String DEPOSIT_PREFIX = "пополнение: +";
+    private static final String WITHDRAWAL_PREFIX = "снятие: -";
+    private static int accountCounter = 1000; 
+
+    private final String accountNumber;
+    private final String kpp;
+    private final String bik;
+    private double balance;
+    private final List<String> transactions;
+
+    /**
+     * создает новый банковский счет на основе предоставленных реквизитов.
+     */
+    public Account(String kpp, String bik) {
+        this.accountNumber = generateAccountNumber();
+        this.kpp = kpp;
+        this.bik = bik;
+        this.balance = 0.0;
+        this.transactions = new ArrayList<>();
+        addTransaction(ACCOUNT_OPENED);
+    }
+
+    /** генерирует короткий уникальный номер банковского счета. */
+    private String generateAccountNumber() {
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        // берем последние 6 цифр timestamp и добавляем счетчик
+        String shortTimestamp = timestamp.substring(timestamp.length() - 6);
+        String accountNum = "ACC" + accountCounter + shortTimestamp;
+        accountCounter++;
+        return accountNum;
+    }
+
+    public String getAccountNumber() { return accountNumber; }
+    public String getKpp() { return kpp; }
+    public String getBik() { return bik; }
+    public double getBalance() { return balance; }
+
+    /** возвращает неизменяемую копию истории транзакций. */
+    public List<String> getTransactions() {
+        return Collections.unmodifiableList(transactions);
+    }
+
+    /** пополняет счет на указанную сумму. */
+    public void deposit(double amount) {
+        validatePositiveAmount(amount);
+        balance += amount;
+        addTransaction(DEPOSIT_PREFIX + formatAmount(amount));
+        System.out.println("счет пополнен на сумму " + String.format("%.2f", amount) + ".");
+    }
+
+    /** снимает средства со счета. */
+    public void withdraw(double amount) {
+        validatePositiveAmount(amount);
+        if (amount > balance) {
+            throw new IllegalArgumentException("недостаточно средств на счете.");
+        }
+        balance -= amount;
+        addTransaction(WITHDRAWAL_PREFIX + formatAmount(amount));
+        System.out.println("сумма " + String.format("%.2f", amount) + " успешно снята со счета.");
+    }
+
+    /** форматирует сумму для единообразного отображения в истории */
+    private String formatAmount(double amount) {
+        return String.format("%.2f", amount);
+    }
+
+    /** проверяет, что сумма положительная. */
+    private void validatePositiveAmount(double amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("сумма должна быть больше нуля.");
+        }
+    }
+
+    /** добавляет запись о транзакции с отметкой времени в историю. */
+    private void addTransaction(String description) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        transactions.add(timestamp + " — " + description);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("номер счета: %s, кпп: %s, бик: %s, баланс: %.2f",
+                accountNumber, kpp, bik, balance);
+    }
+}
+
+/**
+ * основной класс для системы управления банковскими счетами.
+ */
+public class BankSystem {
+
+    private static final int OPEN_ACCOUNT = 1;
+    private static final int DEPOSIT_MONEY = 2;
+    private static final int WITHDRAW_MONEY = 3;
+    private static final int SHOW_BALANCE = 4;
+    private static final int SHOW_TRANSACTIONS = 5;
+    private static final int SEARCH_ACCOUNTS = 6;
+    private static final int EXIT = 0;
+
+    private static final int SEARCH_BY_ACCOUNT_NUMBER = 1;
+    private static final int SEARCH_BY_KPP = 2;
+    private static final int SEARCH_BY_BIK = 3;
+
+    private final Map<String, Account> accountsByNumber;
+    private final Map<String, List<Account>> accountsByKpp;
+    private final Map<String, List<Account>> accountsByBik;
+    private final Scanner scanner;
+
+    /** конструктор - инициализирует коллекции и сканер. */
+    public BankSystem() {
+        accountsByNumber = new HashMap<>();
+        accountsByKpp = new HashMap<>();
+        accountsByBik = new HashMap<>();
+        scanner = new Scanner(System.in);
+    }
+
+    public static void main(String[] args) {
+        BankSystem system = new BankSystem();
+        system.run();
+    }
+
+    /** основной цикл программы. */
+    public void run() {
+        System.out.println("добро пожаловать в банковскую систему!");
+        int choice;
+        do {
+            printMenu();
+            System.out.print("выберите опцию: ");
+            choice = getUserChoice();
+
+            try {
+                handleUserChoice(choice);
+            } catch (Exception e) {
+                System.out.println("ошибка: " + e.getMessage());
+            }
+            System.out.println();
+
+        } while (choice != EXIT);
+
+        System.out.println("операция завершена. спасибо за использование системы!");
+        scanner.close();
+    }
+
+    /** отображает пункты меню. */
+    private void printMenu() {
+        System.out.println("========== меню ==========");
+        System.out.println(OPEN_ACCOUNT + ". открыть новый счет");
+        System.out.println(DEPOSIT_MONEY + ". пополнить счет");
+        System.out.println(WITHDRAW_MONEY + ". снять средства");
+        System.out.println(SHOW_BALANCE + ". проверить баланс");
+        System.out.println(SHOW_TRANSACTIONS + ". история транзакций");
+        System.out.println(SEARCH_ACCOUNTS + ". поиск счетов");
+        System.out.println(EXIT + ". выход");
+    }
+
+    /** обрабатывает выбор пользователя из меню. */
+    private void handleUserChoice(int choice) {
+        switch (choice) {
+            case OPEN_ACCOUNT -> openAccount();
+            case DEPOSIT_MONEY -> depositMoney();
+            case WITHDRAW_MONEY -> withdrawMoney();
+            case SHOW_BALANCE -> showBalance();
+            case SHOW_TRANSACTIONS -> showTransactions();
+            case SEARCH_ACCOUNTS -> searchAccounts();
+            case EXIT -> {} 
+            default -> System.out.println("неверный выбор. пожалуйста, попробуйте еще раз.");
+        }
+    }
+
+    /** считывает числовой ввод от пользователя. */
+    private int getUserChoice() {
+        while (!scanner.hasNextInt()) {
+            System.out.println("пожалуйста, введите число!");
+            scanner.next(); 
+        }
+        int input = scanner.nextInt();
+        scanner.nextLine();
+        return input;
+    }
+
+    /** создает новый счет. */
+    private void openAccount() {
+        System.out.print("введите кпп: ");
+        String kpp = scanner.nextLine().trim();
+        System.out.print("введите бик: ");
+        String bik = scanner.nextLine().trim();
+
+        if (kpp.isEmpty() || bik.isEmpty()) {
+            System.out.println("ошибка: поля кпп и бик обязательны для заполнения.");
+            return;
+        }
+
+        Account account = new Account(kpp, bik);
+        registerAccount(account);
+        System.out.println("счет открыт. номер: " + account.getAccountNumber());
+    }
+
+    /** регистрирует новый счет во внутренних коллекциях. */
+    private void registerAccount(Account account) {
+        accountsByNumber.put(account.getAccountNumber(), account);
+        accountsByKpp.computeIfAbsent(account.getKpp(), k -> new ArrayList<>()).add(account);
+        accountsByBik.computeIfAbsent(account.getBik(), k -> new ArrayList<>()).add(account);
+    }
+
+    /** ищет счет по его номеру. */
+    private Optional<Account> findAccountByNumber(String accountNumber) {
+        return Optional.ofNullable(accountsByNumber.get(accountNumber));
+    }
+
+    /** пополняет средства на выбранном счете. */
+    private void depositMoney() {
+        Optional<Account> accountOpt = getAccountFromUser();
+        accountOpt.ifPresent(account -> {
+            System.out.print("введите сумму для пополнения: ");
+            double amount = getPositiveDoubleInput();
+            try {
+                account.deposit(amount);
+            } catch (IllegalArgumentException e) {
+                System.out.println("ошибка операции: " + e.getMessage());
+            }
+        });
+    }
+
+    /** снимает средства с выбранного счета. */
+    private void withdrawMoney() {
+        Optional<Account> accountOpt = getAccountFromUser();
+        accountOpt.ifPresent(account -> {
+            System.out.print("введите сумму для снятия: ");
+            double amount = getPositiveDoubleInput();
+            try {
+                account.withdraw(amount);
+            } catch (IllegalArgumentException e) {
+                System.out.println("ошибка операции: " + e.getMessage());
+            }
+        });
+    }
+
+    /** отображает баланс счета. */
+    private void showBalance() {
+        Optional<Account> accountOpt = getAccountFromUser();
+        accountOpt.ifPresent(account ->
+                System.out.printf("баланс счета %s: %.2f%n", account.getAccountNumber(), account.getBalance()));
+    }
+
+    /** отображает историю транзакций. */
+    private void showTransactions() {
+        Optional<Account> accountOpt = getAccountFromUser();
+        accountOpt.ifPresent(account -> {
+            System.out.println("история транзакций счета:");
+            List<String> transactions = account.getTransactions();
+            if (transactions.isEmpty()) {
+                System.out.println("история пуста.");
+            } else {
+                transactions.forEach(System.out::println);
+            }
+        });
+    }
+
+    /** запрашивает у пользователя номер счета и возвращает optional с найденным счетом. */
+    private Optional<Account> getAccountFromUser() {
+        System.out.print("введите номер счета: ");
+        String accountNumber = scanner.nextLine().trim();
+        Optional<Account> account = findAccountByNumber(accountNumber);
+        if (account.isEmpty()) {
+            System.out.println("счет с номером " + accountNumber + " не найден.");
+        }
+        return account;
+    }
+
+    /** ищет счета по различным критериям. */
+    private void searchAccounts() {
+        System.out.println("выберите критерии поиска:");
+        System.out.println(SEARCH_BY_ACCOUNT_NUMBER + ". по номеру счета");
+        System.out.println(SEARCH_BY_KPP + ". по кпп");
+        System.out.println(SEARCH_BY_BIK + ". по бик");
+        int choice = getUserChoice();
+        processSearch(choice);
+    }
+
+    /** обрабатывает поиск на основе выбранного типа. */
+    private void processSearch(int searchChoice) {
+        switch (searchChoice) {
+            case SEARCH_BY_ACCOUNT_NUMBER -> searchByAccountNumber();
+            case SEARCH_BY_KPP -> searchByKpp();
+            case SEARCH_BY_BIK -> searchByBik();
+            default -> System.out.println("неизвестная опция поиска.");
+        }
+    }
+
+    private void searchByAccountNumber() {
+        System.out.print("введите номер счета: ");
+        String number = scanner.nextLine().trim();
+        Optional<Account> acc = findAccountByNumber(number);
+        acc.ifPresentOrElse(
+                account -> System.out.println("найден: " + account),
+                () -> System.out.println("счет с таким номером не найден.")
+        );
+    }
+
+    private void searchByKpp() {
+        System.out.print("введите кпп: ");
+        String kpp = scanner.nextLine().trim();
+        List<Account> list = accountsByKpp.getOrDefault(kpp, Collections.emptyList());
+        showSearchResults(list, "кпп: " + kpp);
+    }
+
+    private void searchByBik() {
+        System.out.print("введите бик: ");
+        String bik = scanner.nextLine().trim();
+        List<Account> list = accountsByBik.getOrDefault(bik, Collections.emptyList());
+        showSearchResults(list, "бик: " + bik);
+    }
+
+    private void showSearchResults(List<Account> accounts, String title) {
+        if (accounts.isEmpty()) System.out.println("результаты по " + title + " не найдены.");
+        else {
+            System.out.println("результаты поиска по " + title + ":");
+            accounts.forEach(System.out::println);
+        }
+    }
+
+    /** валидирует положительный числовой ввод для сумм. */
+    private double getPositiveDoubleInput() {
+        while (true) {
+            try {
+                double val = Double.parseDouble(scanner.nextLine().trim());
+                if (val > 0) return val;
+                System.out.println("пожалуйста, введите положительное значение.");
+            } catch (NumberFormatException e) {
+                System.out.println("пожалуйста, введите корректное число.");
+            }
+        }
+    }
+}
